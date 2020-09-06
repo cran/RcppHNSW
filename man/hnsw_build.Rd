@@ -4,8 +4,16 @@
 \alias{hnsw_build}
 \title{Build an hnswlib nearest neighbor index}
 \usage{
-hnsw_build(X, distance = "euclidean", M = 16, ef = 200,
-  verbose = FALSE)
+hnsw_build(
+  X,
+  distance = "euclidean",
+  M = 16,
+  ef = 200,
+  verbose = FALSE,
+  progress = "bar",
+  n_threads = 0,
+  grain_size = 1
+)
 }
 \arguments{
 \item{X}{a numeric matrix of data to add. Each of the n rows is an item in
@@ -31,7 +39,21 @@ than 2.}
 A larger value means a better quality index, but increases build time.
 Should be an integer value between 1 and the size of the dataset.}
 
-\item{verbose}{If \code{TRUE}, log progress to the console.}
+\item{verbose}{If \code{TRUE}, log messages to the console.}
+
+\item{progress}{If \code{"bar"} (the default), also log a progress bar when
+\code{verbose = TRUE}. There is a small but noticeable overhead (a few
+percent of run time) to tracking progress. Set \code{progress = NULL} to
+turn this off. Has no effect if \code{verbose = FALSE}.}
+
+\item{n_threads}{Maximum number of threads to use. The exact number is
+determined by \code{grain_size}.}
+
+\item{grain_size}{Minimum amount of work to do (rows in \code{X} to add) per
+thread. If the number of rows in \code{X} isn't sufficient, then fewer than
+\code{n_threads} will be used. This is useful in cases where the overhead
+of context switching with too many threads outweighs the gains due to
+parallelism.}
 }
 \value{
 an instance of a \code{HnswL2}, \code{HnswCosine} or \code{HnswIp}

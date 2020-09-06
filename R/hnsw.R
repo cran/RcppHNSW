@@ -28,7 +28,7 @@
 #'   searched.
 #' }
 #'
-#' @param X a numeric matrix of data to add. Each of the n rows is an item in
+#' @param X a numeric matrix of data to search Each of the n rows is an item in
 #'   the index.
 #' @param k Number of neighbors to return.
 #' @param distance Type of distance to calculate. One of:
@@ -52,7 +52,18 @@
 #'   to improved recall at the expense of longer search time. Can take values
 #'   between \code{k} and the size of the dataset and may be greater or smaller
 #'   than \code{ef_construction}. Typical values are \code{100 - 2000}.
-#' @param verbose If \code{TRUE}, log progress to the console.
+#' @param verbose If \code{TRUE}, log messages to the console.
+#' @param progress If \code{"bar"} (the default), also log a progress bar when
+#'   \code{verbose = TRUE}. There is a small but noticeable overhead (a few
+#'   percent of run time) to tracking progress. Set \code{progress = NULL} to
+#'   turn this off. Has no effect if \code{verbose = FALSE}.
+#' @param n_threads Maximum number of threads to use. The exact number is
+#'   determined by \code{grain_size}.
+#' @param grain_size Minimum amount of work to do (rows in \code{X} to add or
+#'   search for) per thread. If the number of rows in \code{X} isn't sufficient,
+#'   then fewer than \code{n_threads} will be used. This is useful in cases
+#'   where the overhead of context switching with too many threads outweighs
+#'   the gains due to parallelism.
 #' @return a list containing:
 #' \itemize{
 #'   \item \code{idx} an n by k matrix containing the nearest neighbor indices.
@@ -70,8 +81,12 @@
 #' Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs.
 #' \emph{arXiv preprint} \emph{arXiv:1603.09320}.
 hnsw_knn <- function(X, k = 10, distance = "euclidean",
-                    M = 16, ef_construction = 200, ef = 10,
-                    verbose = FALSE) {
+                     M = 16, ef_construction = 200, ef = 10,
+                     verbose = FALSE, progress = "bar", n_threads = 0,
+                     grain_size = 1) {
+  stopifnot(is.numeric(n_threads) && length(n_threads) == 1 && n_threads >= 0)
+  stopifnot(is.numeric(grain_size) && length(grain_size) == 1 && grain_size >= 0)
+
   if (!is.matrix(X)) {
     stop("X must be matrix")
   }
@@ -87,9 +102,15 @@ hnsw_knn <- function(X, k = 10, distance = "euclidean",
   }
   distance <- match.arg(distance, c("l2", "euclidean", "cosine", "ip"))
 
-  ann <- hnsw_build(X = X, distance = distance, M = M, ef = ef_construction,
-                    verbose = verbose)
-  hnsw_search(X = X, ann = ann, k = k, ef = ef, verbose = verbose)
+  ann <- hnsw_build(
+    X = X, distance = distance, M = M, ef = ef_construction,
+    verbose = verbose, progress = progress, n_threads = n_threads,
+    grain_size = grain_size
+  )
+  hnsw_search(
+    X = X, ann = ann, k = k, ef = ef, verbose = verbose,
+    progress = progress, n_threads = n_threads, grain_size = grain_size
+  )
 }
 
 #' Build an hnswlib nearest neighbor index
@@ -113,7 +134,18 @@ hnsw_knn <- function(X, k = 10, distance = "euclidean",
 #' @param ef Size of the dynamic list used during construction.
 #'   A larger value means a better quality index, but increases build time.
 #'   Should be an integer value between 1 and the size of the dataset.
-#' @param verbose If \code{TRUE}, log progress to the console.
+#' @param verbose If \code{TRUE}, log messages to the console.
+#' @param progress If \code{"bar"} (the default), also log a progress bar when
+#'   \code{verbose = TRUE}. There is a small but noticeable overhead (a few
+#'   percent of run time) to tracking progress. Set \code{progress = NULL} to
+#'   turn this off. Has no effect if \code{verbose = FALSE}.
+#' @param n_threads Maximum number of threads to use. The exact number is
+#'   determined by \code{grain_size}.
+#' @param grain_size Minimum amount of work to do (rows in \code{X} to add) per
+#'   thread. If the number of rows in \code{X} isn't sufficient, then fewer than
+#'   \code{n_threads} will be used. This is useful in cases where the overhead
+#'   of context switching with too many threads outweighs the gains due to
+#'   parallelism.
 #' @return an instance of a \code{HnswL2}, \code{HnswCosine} or \code{HnswIp}
 #'   class.
 #' @examples
@@ -121,7 +153,11 @@ hnsw_knn <- function(X, k = 10, distance = "euclidean",
 #' ann <- hnsw_build(irism)
 #' iris_nn <- hnsw_search(irism, ann, k = 5)
 hnsw_build <- function(X, distance = "euclidean", M = 16, ef = 200,
-                       verbose = FALSE) {
+                       verbose = FALSE, progress = "bar", n_threads = 0,
+                       grain_size = 1) {
+  stopifnot(is.numeric(n_threads) && length(n_threads) == 1 && n_threads >= 0)
+  stopifnot(is.numeric(grain_size) && length(grain_size) == 1 && grain_size >= 0)
+
   if (!is.matrix(X)) {
     stop("X must be matrix")
   }
@@ -134,11 +170,11 @@ hnsw_build <- function(X, distance = "euclidean", M = 16, ef = 200,
   nc <- ncol(X)
 
   clazz <- switch(distance,
-                  "l2" = RcppHNSW::HnswL2,
-                  "euclidean" = RcppHNSW::HnswL2,
-                  "cosine" = RcppHNSW::HnswCosine,
-                  "ip" = RcppHNSW::HnswIp
-                  )
+    "l2" = RcppHNSW::HnswL2,
+    "euclidean" = RcppHNSW::HnswL2,
+    "cosine" = RcppHNSW::HnswCosine,
+    "ip" = RcppHNSW::HnswIp
+  )
   # Create the indexing object. You must say up front the number of items that
   # will be stored (nr).
   ann <- methods::new(clazz, nc, nr, M, ef)
@@ -147,15 +183,27 @@ hnsw_build <- function(X, distance = "euclidean", M = 16, ef = 200,
     attr(ann, "distance") <- "euclidean"
   }
 
-  tsmessage("Building HNSW index with metric '", distance, "'",
-            " ef = ", formatC(ef), " M = ", formatC(M))
-  progress <- Progress$new(max = nr, display = verbose)
-  for (i in 1:nr) {
-    # Items are added directly
-    ann$addItem(X[i, ])
-    progress$increment()
+  tsmessage(
+    "Building HNSW index with metric '", distance, "'",
+    " ef = ", formatC(ef), " M = ", formatC(M), " using ", n_threads, " threads"
+  )
+  ann$setNumThreads(n_threads)
+  ann$setGrainSize(grain_size)
+
+  nstars <- 50
+  if (verbose && nr > nstars && !is.null(progress) && progress == "bar") {
+    progress_for(
+      nr, nstars,
+      function(chunk_start, chunk_end) {
+        ann$addItems(X[chunk_start:chunk_end, , drop = FALSE])
+      }
+    )
+  }
+  else {
+    ann$addItems(X)
   }
 
+  tsmessage("Finished building index")
   ann
 }
 
@@ -171,7 +219,18 @@ hnsw_build <- function(X, distance = "euclidean", M = 16, ef = 200,
 #'   to improved recall at the expense of longer search time. Can take values
 #'   between \code{k} and the size of the dataset. Typical values are
 #'   \code{100 - 2000}.
-#' @param verbose If \code{TRUE}, log progress to the console.
+#' @param verbose If \code{TRUE}, log messages to the console.
+#' @param progress If \code{"bar"} (the default), also log a progress bar when
+#'   \code{verbose = TRUE}. There is a small but noticeable overhead (a few
+#'   percent of run time) to tracking progress. Set \code{progress = NULL} to
+#'   turn this off. Has no effect if \code{verbose = FALSE}.
+#' @param n_threads Maximum number of threads to use. The exact number is
+#'   determined by \code{grain_size}.
+#' @param grain_size Minimum amount of work to do (rows in \code{X} to search)
+#'   per thread. If the number of rows in \code{X} isn't sufficient, then fewer
+#'   than \code{n_threads} will be used. This is useful in cases where the
+#'   overhead of context switching with too many threads outweighs the gains due
+#'   to parallelism.
 #' @return a list containing:
 #' \itemize{
 #'   \item \code{idx} an n by k matrix containing the nearest neighbor indices.
@@ -188,7 +247,11 @@ hnsw_build <- function(X, distance = "euclidean", M = 16, ef = 200,
 #' irism <- as.matrix(iris[, -5])
 #' ann <- hnsw_build(irism)
 #' iris_nn <- hnsw_search(irism, ann, k = 5)
-hnsw_search <- function(X, ann, k, ef = 10, verbose = FALSE) {
+hnsw_search <- function(X, ann, k, ef = 10, verbose = FALSE, progress = "bar",
+                        n_threads = 0, grain_size = 1) {
+  stopifnot(is.numeric(n_threads) && length(n_threads) == 1 && n_threads >= 0)
+  stopifnot(is.numeric(grain_size) && length(grain_size) == 1 && grain_size >= 0)
+
   if (!is.matrix(X)) {
     stop("X must be matrix")
   }
@@ -200,21 +263,35 @@ hnsw_search <- function(X, ann, k, ef = 10, verbose = FALSE) {
   dist <- matrix(nrow = nr, ncol = k)
 
   ann$setEf(ef)
-  tsmessage("Searching HNSW index with ef = ", formatC(ef))
-  search_progress <- Progress$new(max = nr, display = verbose)
-  for (i in 1:nr) {
-    # Neighbors are queried by passing the vector back in
-    # To get distances as well as indices, use include_distances = TRUE
-    res <- ann$getNNsList(X[i, ], k, TRUE)
-    idx[i, ] <- as.integer(res$item)
-    dist[i, ] <- res$distance
-    search_progress$increment()
+  ann$setNumThreads(n_threads)
+  ann$setGrainSize(grain_size)
+  tsmessage(
+    "Searching HNSW index with ef = ", formatC(ef), " and ", n_threads,
+    " threads"
+  )
+
+  nstars <- 50
+  if (verbose && nr > nstars && !is.null(progress) && progress == "bar") {
+    progress_for(
+      nr, nstars,
+      function(chunk_start, chunk_end) {
+        res <- ann$getAllNNsList(X[chunk_start:chunk_end, , drop = FALSE], k, TRUE)
+        idx[chunk_start:chunk_end, ] <<- as.integer(res$item)
+        dist[chunk_start:chunk_end, ] <<- res$distance
+      }
+    )
+  }
+  else {
+    res <- ann$getAllNNsList(X, k, TRUE)
+    idx <- res$item
+    dist <- res$distance
   }
 
   if (!is.null(attr(ann, "distance")) &&
-      attr(ann, "distance") == "euclidean") {
+    attr(ann, "distance") == "euclidean") {
     dist <- sqrt(dist)
   }
 
+  tsmessage("Finished searching")
   list(idx = idx, dist = dist)
 }
