@@ -1,3 +1,15 @@
+# RcppHNSW 0.4.0
+
+## New features
+
+* Updated hnswlib to 
+[version 0.6.2](https://github.com/nmslib/hnswlib/releases/tag/v0.6.2).
+
+## Bug fixes and minor improvements
+
+* Minor future-proofing of licensing: RcppHNSW is now GPLv3 or later, rather
+than GPLv3 only.
+
 # RcppHNSW 0.3.0
 
 ## New features
