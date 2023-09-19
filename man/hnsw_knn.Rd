@@ -14,23 +14,25 @@ hnsw_knn(
   verbose = FALSE,
   progress = "bar",
   n_threads = 0,
-  grain_size = 1
+  grain_size = 1,
+  byrow = TRUE
 )
 }
 \arguments{
-\item{X}{a numeric matrix of data to search Each of the n rows is an item in
-the index.}
+\item{X}{A numeric matrix of \code{n} items to search for neighbors. If
+\code{byrow = TRUE} (the default) then each row of \code{X} stores an item to be
+searched. Otherwise, each item should be stored in the columns of \code{X}.}
 
 \item{k}{Number of neighbors to return.}
 
 \item{distance}{Type of distance to calculate. One of:
 \itemize{
-  \item \code{"l2"} Squared L2, i.e. squared Euclidean.
-  \item \code{"euclidean"} Euclidean.
-  \item \code{"cosine"} Cosine.
-  \item \code{"ip"} Inner product: 1 - sum(ai * bi), i.e. the cosine distance
-  where the vectors are not normalized. This can lead to negative distances
-  and other non-metric behavior.
+\item \code{"l2"} Squared L2, i.e. squared Euclidean.
+\item \code{"euclidean"} Euclidean.
+\item \code{"cosine"} Cosine.
+\item \code{"ip"} Inner product: 1 - sum(ai * bi), i.e. the cosine distance
+where the vectors are not normalized. This can lead to negative distances
+and other non-metric behavior.
 }}
 
 \item{M}{Controls the number of bi-directional links created for each element
@@ -50,10 +52,7 @@ than \code{ef_construction}. Typical values are \code{100 - 2000}.}
 
 \item{verbose}{If \code{TRUE}, log messages to the console.}
 
-\item{progress}{If \code{"bar"} (the default), also log a progress bar when
-\code{verbose = TRUE}. There is a small but noticeable overhead (a few
-percent of run time) to tracking progress. Set \code{progress = NULL} to
-turn this off. Has no effect if \code{verbose = FALSE}.}
+\item{progress}{defunct and has no effect.}
 
 \item{n_threads}{Maximum number of threads to use. The exact number is
 determined by \code{grain_size}.}
@@ -63,18 +62,32 @@ search for) per thread. If the number of rows in \code{X} isn't sufficient,
 then fewer than \code{n_threads} will be used. This is useful in cases
 where the overhead of context switching with too many threads outweighs
 the gains due to parallelism.}
+
+\item{byrow}{if \code{TRUE} (the default), this indicates that the items to be
+processed in \code{X} are stored in each row of \code{X}. Otherwise, the items are
+stored in the columns of \code{X}. Storing items in each column reduces the
+overhead of copying data to a form that can be used by the \code{hnsw}
+library. Note that if \code{byrow = FALSE}, any matrices returned from this
+function will also store the items by column.}
 }
 \value{
 a list containing:
 \itemize{
-  \item \code{idx} an n by k matrix containing the nearest neighbor indices.
-  \item \code{dist} an n by k matrix containing the nearest neighbor
-   distances.
+\item \code{idx} a matrix containing the nearest neighbor indices.
+\item \code{dist} a matrix containing the nearest neighbor distances.
 }
+
+The dimensions of the matrices respect the storage (row or column-based) of
+\code{X} as indicated by the \code{byrow} parameter. If \code{byrow = TRUE} (the default)
+each row of \code{idx} and \code{dist} contain the neighbor information for the item
+passed in the equivalent row of \code{X}, i.e. the dimensions are \verb{n x k} where
+\code{n} is the number of items in \code{X}. If \code{byrow = FALSE}, then each column of
+\code{idx} and \code{dist} contain the neighbor  information for the item passed in
+the equivalent column of \code{X}, i.e. the dimensions are \verb{k x n}.
+
 Every item in the dataset is considered to be a neighbor of itself, so the
-first neighbor of item \code{i} should always be \code{i} itself. If that
-isn't the case, then any of \code{M}, \code{ef_construction} and \code{ef}
-may need increasing.
+first neighbor of item \code{i} should always be \code{i} itself. If that isn't the
+case, then any of \code{M}, \code{ef_construction} or \code{ef} may need increasing.
 }
 \description{
 A k-nearest neighbor algorithm using the hnswlib library
@@ -85,25 +98,23 @@ A k-nearest neighbor algorithm using the hnswlib library
 
 Some details on the parameters used for index construction and search, based
 on \url{https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md}:
-
 \itemize{
-  \item \code{M} Controls the number of bi-directional links created for each
-  element during index construction. Higher values lead to better results at
-  the expense of memory consumption, which is around \code{M * 8-10} bytes
-  per bytes per stored element. High intrinsic dimensionalities will require
-  higher values of \code{M}. A range of \code{2 - 100} is typical, but
-  \code{12 - 48} is ok for most use cases.
-  \item \code{ef_construction} Size of the dynamic list used during
-  construction. A larger value means a better quality index, but increases
-  build time. Should be an integer value between 1 and the size of the
-  dataset. A typical range is \code{100 - 2000}. Beyond a certain point,
-  increasing \code{ef_construction} has no effect. A sufficient value of
-  \code{ef_construction} can be determined by searching with \code{ef =
-  ef_construction}, and ensuring that the recall is at least 0.9.
-  \item \code{ef} Size of the dynamic list used during index search. Can
-  differ from \code{ef_construction} and be any value between \code{k} (the
-  number of neighbors sought) and the number of elements in the index being
-  searched.
+\item \code{M} Controls the number of bi-directional links created for each
+element during index construction. Higher values lead to better results at
+the expense of memory consumption, which is around \code{M * 8-10} bytes
+per bytes per stored element. High intrinsic dimensionalities will require
+higher values of \code{M}. A range of \code{2 - 100} is typical, but
+\code{12 - 48} is ok for most use cases.
+\item \code{ef_construction} Size of the dynamic list used during
+construction. A larger value means a better quality index, but increases
+build time. Should be an integer value between 1 and the size of the
+dataset. A typical range is \code{100 - 2000}. Beyond a certain point,
+increasing \code{ef_construction} has no effect. A sufficient value of
+\code{ef_construction} can be determined by searching with \code{ef = ef_construction}, and ensuring that the recall is at least 0.9.
+\item \code{ef} Size of the dynamic list used during index search. Can
+differ from \code{ef_construction} and be any value between \code{k} (the
+number of neighbors sought) and the number of elements in the index being
+searched.
 }
 }
 

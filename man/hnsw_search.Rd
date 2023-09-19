@@ -12,11 +12,14 @@ hnsw_search(
   verbose = FALSE,
   progress = "bar",
   n_threads = 0,
-  grain_size = 1
+  grain_size = 1,
+  byrow = TRUE
 )
 }
 \arguments{
-\item{X}{A numeric matrix of data to search for neighbors.}
+\item{X}{A numeric matrix of data to search for neighbors. If \code{byrow = TRUE}
+(the default) then each row of \code{X} is an item to be searched. Otherwise,
+each item should be stored in the columns of \code{X}.}
 
 \item{ann}{an instance of a \code{HnswL2}, \code{HnswCosine} or \code{HnswIp}
 class.}
@@ -32,32 +35,42 @@ between \code{k} and the size of the dataset. Typical values are
 
 \item{verbose}{If \code{TRUE}, log messages to the console.}
 
-\item{progress}{If \code{"bar"} (the default), also log a progress bar when
-\code{verbose = TRUE}. There is a small but noticeable overhead (a few
-percent of run time) to tracking progress. Set \code{progress = NULL} to
-turn this off. Has no effect if \code{verbose = FALSE}.}
+\item{progress}{defunct and has no effect.}
 
 \item{n_threads}{Maximum number of threads to use. The exact number is
 determined by \code{grain_size}.}
 
-\item{grain_size}{Minimum amount of work to do (rows in \code{X} to search)
-per thread. If the number of rows in \code{X} isn't sufficient, then fewer
+\item{grain_size}{Minimum amount of work to do (items in \code{X} to search)
+per thread. If the number of items in \code{X} isn't sufficient, then fewer
 than \code{n_threads} will be used. This is useful in cases where the
 overhead of context switching with too many threads outweighs the gains due
 to parallelism.}
+
+\item{byrow}{if \code{TRUE} (the default), this indicates that the items to be
+searched in \code{X} are stored in each row of \code{X}. Otherwise, the items are
+stored in the columns of \code{X}. Storing items in each column reduces the
+overhead of copying data to a form that can be searched by the \code{hnsw}
+library. Note that if \code{byrow = FALSE}, any matrices returned from this
+function will also store the items by column.}
 }
 \value{
 a list containing:
 \itemize{
-  \item \code{idx} an n by k matrix containing the nearest neighbor indices.
-  \item \code{dist} an n by k matrix containing the nearest neighbor
-   distances.
+\item \code{idx} a matrix containing the nearest neighbor indices.
+\item \code{dist} a matrix containing the nearest neighbor distances.
 }
 
+The dimensions of the matrices respect the storage (row or column-based) of
+\code{X} as indicated by the \code{byrow} parameter. If \code{byrow = TRUE} (the default)
+each row of \code{idx} and \code{dist} contain the neighbor information for the item
+passed in the equivalent row of \code{X}, i.e. the dimensions are \verb{n x k} where
+\code{n} is the number of items in \code{X}. If \code{byrow = FALSE}, then each column of
+\code{idx} and \code{dist} contain the neighbor  information for the item passed in
+the equivalent column of \code{X}, i.e. the dimensions are \verb{k x n}.
+
 Every item in the dataset is considered to be a neighbor of itself, so the
-first neighbor of item \code{i} should always be \code{i} itself. If that
-isn't the case, then any of \code{M}, \code{ef_construction} and \code{ef}
-may need increasing.
+first neighbor of item \code{i} should always be \code{i} itself. If that isn't the
+case, then any of \code{M} or \code{ef} may need increasing.
 }
 \description{
 Search an hnswlib nearest neighbor index

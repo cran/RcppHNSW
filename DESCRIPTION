@@ -1,7 +1,7 @@
 Package: RcppHNSW
 Title: 'Rcpp' Bindings for 'hnswlib', a Library for Approximate Nearest
         Neighbors
-Version: 0.4.1
+Version: 0.5.0
 Authors@R: c(person("James", "Melville", email = "jlmelville@gmail.com", 
   role = c("aut", "cre")), 
   person("Aaron", "Lun", role = "ctb"), 
@@ -18,10 +18,10 @@ BugReports: https://github.com/jlmelville/rcpphnsw/issues
 Encoding: UTF-8
 Imports: methods, Rcpp (>= 0.11.3)
 LinkingTo: Rcpp
-RoxygenNote: 7.2.0
+RoxygenNote: 7.2.3
 Suggests: testthat, covr
 NeedsCompilation: yes
-Packaged: 2022-07-17 18:13:40 UTC; jlmel
+Packaged: 2023-09-19 00:18:51 UTC; james
 Author: James Melville [aut, cre],
   Aaron Lun [ctb],
   Samuel Granjeaud [ctb],
@@ -29,4 +29,4 @@ Author: James Melville [aut, cre],
   Yuxing Liao [ctb]
 Maintainer: James Melville <jlmelville@gmail.com>
 Repository: CRAN
-Date/Publication: 2022-07-18 07:20:02 UTC
+Date/Publication: 2023-09-19 03:50:02 UTC
