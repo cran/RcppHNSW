@@ -1,3 +1,9 @@
+# RcppHNSW 0.6.0
+
+## New features
+
+* Updated hnswlib to [version 0.8.0](https://github.com/nmslib/hnswlib/releases/tag/v0.8.0).
+
 # RcppHNSW 0.5.0
 
 ## New features
